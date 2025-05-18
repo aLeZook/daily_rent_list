@@ -2,11 +2,11 @@ name: Daily Rentcast Fetch
 
 on:
   schedule:
-    - cron: '0 9 * * *'  # Every day at 9:00 AM UTC
+    - cron: '0 9 * * *'
   workflow_dispatch:
 
 jobs:
-  fetch-data:
+  fetch-and-send:
     runs-on: ubuntu-latest
     steps:
       - name: Fetch Rentcast Data
@@ -17,10 +17,23 @@ jobs:
                --header "accept: application/json" \
                --output rentcast_output.json
 
-      - name: Send to Discord
+      - name: Install jq
+        run: sudo apt-get install -y jq
+
+      - name: Split and Send to Discord
         run: |
-          DATA=$(head -c 1900 rentcast_output.json | jq -Rs .)
-          curl -H "Content-Type: application/json" \
-               -X POST \
-               -d "{\"content\": $DATA}" \
-               ${{ secrets.DISCORD_WEBHOOK_URL }}
+          MAX=5
+          COUNT=$(jq length rentcast_output.json)
+          BATCHES=$(( (COUNT + MAX - 1) / MAX ))
+          for ((i=0; i<BATCHES; i++)); do
+            MSG=$(jq -r ".[$((i*MAX)):$(((i+1)*MAX))] | map(
+              \"🏠 \(.formattedAddress) — \(.bedrooms)bd/\(.bathrooms)ba — \$\(.price)/mo — \(.propertyType)\"
+            ) | join(\"\n\")" rentcast_output.json)
+            
+            curl -H "Content-Type: application/json" \
+                 -X POST \
+                 -d "{\"content\": \"**Listings Batch $((i+1))/$BATCHES**\n$MSG\"}" \
+                 ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+            sleep 1
+          done
