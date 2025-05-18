@@ -3,7 +3,7 @@ name: Daily Rentcast Fetch
 on:
   schedule:
     - cron: '0 9 * * *'  # Runs every day at 9:00 AM UTC
-  workflow_dispatch:      # Allows manual runs from GitHub UI
+  workflow_dispatch:      # Allows manual trigger
 
 jobs:
   fetch-and-send:
@@ -21,7 +21,7 @@ jobs:
       - name: Install jq
         run: sudo apt-get install -y jq
 
-      - name: Split and Send to Discord
+      - name: Split and Send to Discord (with Google Maps links)
         run: |
           jq empty rentcast_output.json || { echo "Invalid JSON file"; exit 1; }
 
@@ -32,10 +32,10 @@ jobs:
 
           for ((i=0; i<BATCHES; i++)); do
             MSG=$(jq -r ".[$((i*MAX)):$(((i+1)*MAX))] | map(
-              \"🏠 \(.formattedAddress) — \(.bedrooms)bd/\(.bathrooms)ba — \$\(.price)/mo — \(.propertyType)\"
+              \"🏠 [\(.formattedAddress)](https://www.google.com/maps/search/?api=1&query=\(.formattedAddress | gsub(\" \"; \"+\"))) — \(.bedrooms)bd/\(.bathrooms)ba — \$\(.price)/mo — \(.propertyType)\"
             ) | join(\"\n\")" rentcast_output.json)
 
-            # Use jq to create valid JSON
+            # Ensure message is escaped properly for JSON
             PAYLOAD=$(jq -Rn --arg msg "**Listings Batch $((i+1))/$BATCHES**\n$MSG" '{content: $msg}')
 
             echo "Sending batch $((i+1)) of $BATCHES..."
