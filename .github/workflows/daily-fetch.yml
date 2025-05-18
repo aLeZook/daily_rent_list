@@ -2,17 +2,25 @@ name: Daily Rentcast Fetch
 
 on:
   schedule:
-    - cron: '0 9 * * *'  # Runs every day at 9:00 AM UTC
+    - cron: '0 9 * * *'  # Every day at 9:00 AM UTC
   workflow_dispatch:
 
 jobs:
   fetch-data:
     runs-on: ubuntu-latest
     steps:
-      - name: Make API Request
+      - name: Fetch Rentcast Data
         run: |
           curl --request GET \
-               --url 'https://api.rentcast.io/v1/listings/rental/long-term?city=San%20Marcos&state=CA&status=Active&limit=500' \
+               --url 'https://api.rentcast.io/v1/listings/rental/long-term?city=San%20Marcos&state=CA&zipCode=92069&status=Active&limit=500' \
                --header "X-Api-Key: ${{ secrets.RENTCAST_API_KEY }}" \
                --header "accept: application/json" \
                --output rentcast_output.json
+
+      - name: Send to Discord
+        run: |
+          DATA=$(head -c 1900 rentcast_output.json | jq -Rs .)
+          curl -H "Content-Type: application/json" \
+               -X POST \
+               -d "{\"content\": $DATA}" \
+               ${{ secrets.DISCORD_WEBHOOK_URL }}
